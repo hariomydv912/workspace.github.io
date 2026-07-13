@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>UPTAC CSV Shortlist</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: Arial, sans-serif;
+    }
+    body { margin: 0; padding: 20px; background: #f5f7fb; color: #162033; }
+    .panel { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+    h1 { margin-top: 0; }
+    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
+    input, textarea, button, select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cfd7e4; box-sizing: border-box; font-size: 14px; }
+    textarea { min-height: 180px; resize: vertical; margin-top: 8px; }
+    button { cursor: pointer; background: #2751d6; color: white; border: none; }
+    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+    .summary { margin: 12px 0; font-weight: bold; color: #334; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
+    th, td { border: 1px solid #e0e7f0; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #eef4ff; position: sticky; top: 0; }
+    tr:nth-child(even) { background: #fafcff; }
+    .muted { color: #64748b; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h1>UPTAC CSV Shortlist Tool</h1>
+    <p class="muted">Upload a CSV file or paste the CSV text, then filter the records by institute, program, category, gender, quota, or rank.</p>
+
+    <div class="controls">
+      <label>
+        <div class="muted">Upload CSV</div>
+        <input type="file" id="csvFile" accept=".csv,text/csv" />
+      </label>
+      <label>
+        <div class="muted">Institute</div>
+        <input id="instituteFilter" placeholder="e.g. Lucknow" />
+      </label>
+      <label>
+        <div class="muted">Program</div>
+        <input id="programFilter" placeholder="e.g. Computer Science" />
+      </label>
+      <label>
+        <div class="muted">Category</div>
+        <input id="categoryFilter" placeholder="e.g. OPEN" />
+      </label>
+      <label>
+        <div class="muted">Seat Gender</div>
+        <input id="seatGenderFilter" placeholder="e.g. Female" />
+      </label>
+      <label>
+        <div class="muted">Quota</div>
+        <input id="quotaFilter" placeholder="e.g. Home State" />
+      </label>
+      <label>
+        <div class="muted">Max Closing Rank</div>
+        <input id="maxClosingRank" type="number" placeholder="e.g. 500000" />
+      </label>
+      <label>
+        <div class="muted">Min Opening Rank</div>
+        <input id="minOpeningRank" type="number" placeholder="e.g. 100000" />
+      </label>
+    </div>
+
+    <div class="row">
+      <button id="loadSampleBtn" type="button">Load Sample CSV</button>
+      <button id="filterBtn" type="button">Shortlist</button>
+      <button id="clearBtn" type="button" style="background:#64748b;">Clear</button>
+    </div>
+
+    <textarea id="csvText" placeholder="Paste CSV text here..."></textarea>
+    <div id="summary" class="summary">No data loaded</div>
+    <div style="overflow:auto;">
+      <table id="resultsTable">
+        <thead></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const csvInput = document.getElementById('csvText');
+    const resultsTable = document.getElementById('resultsTable');
+    const summary = document.getElementById('summary');
+
+    function parseCSV(text) {
+      if (!text || !text.trim()) return [];
+      const rows = [];
+      let row = [];
+      let field = '';
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i += 1) {
+        const char = text[i];
+        const next = text[i + 1];
+
+        if (char === '"') {
+          if (inQuotes && next === '"') {
+            field += '"';
+            i += 1;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (char === ',' && !inQuotes) {
+          row.push(field);
+          field = '';
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+          if (char === '\r' && next === '\n') {
+            i += 1;
+          }
+          row.push(field);
+          field = '';
+          if (row.some(v => v !== '')) {
+            rows.push(row);
+          }
+          row = [];
+        } else {
+          field += char;
+        }
+      }
+
+      if (field.length || row.length) {
+        row.push(field);
+        if (row.some(v => v !== '')) {
+          rows.push(row);
+        }
+      }
+
+      return rows;
+    }
+
+    function toRecords(rows) {
+      const headers = rows[0] || [];
+      const dataRows = rows.slice(1);
+      return dataRows
+        .filter(row => row.some(v => v !== ''))
+        .map((row) => ({
+          srNo: row[0] || '',
+          round: row[1] || '',
+          institute: row[2] || '',
+          program: row[3] || '',
+          stream: row[4] || '',
+          quota: row[5] || '',
+          category: row[6] || '',
+          seatGender: row[7] || '',
+          openingRank: row[8] || '',
+          closingRank: row[9] || '',
+          remark: row[10] || '',
+          raw: row
+        }));
+    }
+
+    function renderTable(records) {
+      const thead = resultsTable.querySelector('thead');
+      const tbody = resultsTable.querySelector('tbody');
+      thead.innerHTML = '';
+      tbody.innerHTML = '';
+
+      const columns = ['Sr.No','Round','Institute','Program','Category','Seat Gender','Quota','Opening Rank','Closing Rank','Remark'];
+      const headerRow = document.createElement('tr');
+      columns.forEach((col) => {
+        const th = document.createElement('th');
+        th.textContent = col;
+        headerRow.appendChild(th);
+      });
+      thead.appendChild(headerRow);
+
+      if (!records.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = columns.length;
+        td.textContent = 'No matching records.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        summary.textContent = '0 matching records';
+        return;
+      }
+
+      records.forEach((record) => {
+        const tr = document.createElement('tr');
+        [record.srNo, record.round, record.institute, record.program, record.category, record.seatGender, record.quota, record.openingRank, record.closingRank, record.remark].forEach((value) => {
+          const td = document.createElement('td');
+          td.textContent = value;
+          tr.appendChild(td);
+        });
+        tbody.appendChild(tr);
+      });
+
+      summary.textContent = `${records.length} matching records`;
+    }
+
+    function applyFilters() {
+      const text = csvInput.value;
+      const rows = parseCSV(text);
+      const records = toRecords(rows);
+      const institute = document.getElementById('instituteFilter').value.trim().toLowerCase();
+      const program = document.getElementById('programFilter').value.trim().toLowerCase();
+      const category = document.getElementById('categoryFilter').value.trim().toLowerCase();
+      const seatGender = document.getElementById('seatGenderFilter').value.trim().toLowerCase();
+      const quota = document.getElementById('quotaFilter').value.trim().toLowerCase();
+      const maxClosingRank = document.getElementById('maxClosingRank').value.trim();
+      const minOpeningRank = document.getElementById('minOpeningRank').value.trim();
+
+      const filtered = records.filter((record) => {
+        const instituteMatch = !institute || record.institute.toLowerCase().includes(institute);
+        const programMatch = !program || record.program.toLowerCase().includes(program);
+        const categoryMatch = !category || record.category.toLowerCase().includes(category);
+        const seatGenderMatch = !seatGender || record.seatGender.toLowerCase().includes(seatGender);
+        const quotaMatch = !quota || record.quota.toLowerCase().includes(quota);
+        const openingRank = Number(record.openingRank);
+        const closingRank = Number(record.closingRank);
+        const minOpeningMatch = !minOpeningRank || Number.isNaN(openingRank) || openingRank >= Number(minOpeningRank);
+        const maxClosingMatch = !maxClosingRank || Number.isNaN(closingRank) || closingRank <= Number(maxClosingRank);
+        return instituteMatch && programMatch && categoryMatch && seatGenderMatch && quotaMatch && minOpeningMatch && maxClosingMatch;
+      });
+
+      renderTable(filtered);
+    }
+
+    document.getElementById('filterBtn').addEventListener('click', applyFilters);
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      document.getElementById('csvText').value = '';
+      document.getElementById('instituteFilter').value = '';
+      document.getElementById('programFilter').value = '';
+      document.getElementById('categoryFilter').value = '';
+      document.getElementById('seatGenderFilter').value = '';
+      document.getElementById('quotaFilter').value = '';
+      document.getElementById('maxClosingRank').value = '';
+      document.getElementById('minOpeningRank').value = '';
+      renderTable([]);
+      summary.textContent = 'No data loaded';
+    });
+
+    document.getElementById('csvFile').addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        csvInput.value = reader.result;
+        applyFilters();
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById('loadSampleBtn').addEventListener('click', async () => {
+      try {
+        const response = await fetch('./uptac01.csv');
+        if (!response.ok) throw new Error('Sample file not found');
+        const text = await response.text();
+        csvInput.value = text;
+        applyFilters();
+      } catch (error) {
+        csvInput.value = 'Please upload a CSV file or paste its contents here.';
+        summary.textContent = 'Sample file could not be loaded. Please upload the CSV manually.';
+      }
+    });
+  </script>
+</body>
+</html>
