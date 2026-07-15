@@ -1,262 +1,547 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UPTAC CSV Shortlist</title>
-  <style>
-    :root {
-      color-scheme: light dark;
-      font-family: Arial, sans-serif;
-    }
-    body { margin: 0; padding: 20px; background: #f5f7fb; color: #162033; }
-    .panel { max-width: 1400px; margin: 0 auto; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.08); }
-    h1 { margin-top: 0; }
-    .controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
-    input, textarea, button, select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #cfd7e4; box-sizing: border-box; font-size: 14px; }
-    textarea { min-height: 180px; resize: vertical; margin-top: 8px; }
-    button { cursor: pointer; background: #2751d6; color: white; border: none; }
-    .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
-    .summary { margin: 12px 0; font-weight: bold; color: #334; }
-    table { width: 100%; border-collapse: collapse; margin-top: 12px; font-size: 13px; }
-    th, td { border: 1px solid #e0e7f0; padding: 8px; text-align: left; vertical-align: top; }
-    th { background: #eef4ff; position: sticky; top: 0; }
-    tr:nth-child(even) { background: #fafcff; }
-    .muted { color: #64748b; font-size: 12px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UP Counselling Data Explorer</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<style>
+  :root{
+    --ink:#10182b;
+    --paper:#f5f3ee;
+    --panel:#ffffff;
+    --line:#dcd6c8;
+    --navy:#1c2b4a;
+    --navy-2:#2b3f68;
+    --amber:#c4791f;
+    --amber-2:#e5a04a;
+    --muted:#6b7280;
+    --good:#2f6b4f;
+    --mono: "IBM Plex Mono","JetBrains Mono",ui-monospace,Consolas,monospace;
+    --serif: "Source Serif 4","Georgia",serif;
+    --sans: "IBM Plex Sans","Segoe UI",Arial,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;
+  }
+  header{
+    background:var(--navy);
+    color:#f0ede4;
+    padding:28px clamp(16px,4vw,48px) 22px;
+    border-bottom:4px solid var(--amber);
+  }
+  header .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--amber-2);
+    margin-bottom:6px;
+  }
+  header h1{
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:clamp(24px,3.4vw,34px);
+    margin:0 0 6px;
+  }
+  header p{
+    margin:0;
+    color:#c9cfdd;
+    font-size:14px;
+    max-width:64ch;
+  }
+  #status{
+    font-family:var(--mono);
+    font-size:12px;
+    color:var(--amber-2);
+    margin-top:12px;
+  }
+
+  main{padding:20px clamp(16px,4vw,48px) 60px;}
+
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:18px;
+    margin-bottom:18px;
+  }
+  .filters{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(180px,1fr));
+    gap:14px;
+  }
+  .field label{
+    display:block;
+    font-family:var(--mono);
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .field input,
+  .field select{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:#fffef9;
+    font-size:14px;
+    font-family:var(--sans);
+    color:var(--ink);
+  }
+  .field input:focus,
+  .field select:focus{
+    outline:2px solid var(--amber-2);
+    outline-offset:1px;
+  }
+  .rank-row{display:flex; gap:8px;}
+  .rank-row input{width:100%;}
+
+  .toolbar{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-top:14px;
+  }
+  .toolbar .count{
+    font-family:var(--mono);
+    font-size:13px;
+    color:var(--navy-2);
+  }
+  .toolbar .count b{color:var(--amber);}
+  button.reset{
+    font-family:var(--sans);
+    font-size:13px;
+    border:1px solid var(--navy);
+    background:transparent;
+    color:var(--navy);
+    padding:8px 14px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  button.reset:hover{background:var(--navy); color:#fff;}
+
+  .table-wrap{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:auto;
+    max-height:64vh;
+  }
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:13.5px;
+  }
+  thead th{
+    position:sticky;
+    top:0;
+    background:var(--navy);
+    color:#f0ede4;
+    text-align:left;
+    padding:10px 12px;
+    font-weight:600;
+    font-size:12px;
+    letter-spacing:.03em;
+    cursor:pointer;
+    white-space:nowrap;
+    user-select:none;
+    border-right:1px solid rgba(255,255,255,.08);
+  }
+  thead th:hover{background:var(--navy-2);}
+  thead th.active-asc::after{content:" ▲"; color:var(--amber-2);}
+  thead th.active-desc::after{content:" ▼"; color:var(--amber-2);}
+  tbody td{
+    padding:9px 12px;
+    border-bottom:1px solid var(--line);
+    vertical-align:top;
+  }
+  tbody tr:nth-child(even){background:#faf8f2;}
+  tbody tr:hover{background:#f1e8d6;}
+  td.num, th.num{font-family:var(--mono); text-align:right; white-space:nowrap;}
+  td.institute{min-width:260px; font-weight:600;}
+  td.program{min-width:220px;}
+
+  .pager{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:14px;
+    margin-top:14px;
+    font-family:var(--mono);
+    font-size:13px;
+  }
+  .pager button{
+    border:1px solid var(--navy);
+    background:#fff;
+    color:var(--navy);
+    padding:6px 12px;
+    border-radius:6px;
+    cursor:pointer;
+  }
+  .pager button:disabled{opacity:.35; cursor:default;}
+
+  .empty{
+    padding:40px;
+    text-align:center;
+    color:var(--muted);
+    font-family:var(--mono);
+    font-size:13px;
+  }
+
+  .loadbar{
+    padding:60px 20px;
+    text-align:center;
+    font-family:var(--mono);
+    color:var(--navy-2);
+  }
+  .fileFallback{
+    margin-top:10px;
+    font-size:13px;
+  }
+</style>
 </head>
 <body>
+
+<header>
+  <div class="eyebrow">UP B.Tech Counselling &middot; Round-wise Seat Allotment</div>
+  <h1>UP Counselling Data Explorer</h1>
+  <p>Search and sort opening/closing ranks across institutes, programs, categories and rounds. Data loads from <code>UPdata.csv</code> in this folder.</p>
+  <div id="status">loading UPdata.csv&hellip;</div>
+</header>
+
+<main>
+
   <div class="panel">
-    <h1>UPTAC CSV Shortlist Tool</h1>
-    <p class="muted">Upload a CSV file or paste the CSV text, then filter the records by institute, program, category, gender, quota, or rank.</p>
-
-    <div class="controls">
-      <label>
-        <div class="muted">Upload CSV</div>
-        <input type="file" id="csvFile" accept=".csv,text/csv" />
-      </label>
-      <label>
-        <div class="muted">Institute</div>
-        <input id="instituteFilter" placeholder="e.g. Lucknow" />
-      </label>
-      <label>
-        <div class="muted">Program</div>
-        <input id="programFilter" placeholder="e.g. Computer Science" />
-      </label>
-      <label>
-        <div class="muted">Category</div>
-        <input id="categoryFilter" placeholder="e.g. OPEN" />
-      </label>
-      <label>
-        <div class="muted">Seat Gender</div>
-        <input id="seatGenderFilter" placeholder="e.g. Female" />
-      </label>
-      <label>
-        <div class="muted">Quota</div>
-        <input id="quotaFilter" placeholder="e.g. Home State" />
-      </label>
-      <label>
-        <div class="muted">Max Closing Rank</div>
-        <input id="maxClosingRank" type="number" placeholder="e.g. 500000" />
-      </label>
-      <label>
-        <div class="muted">Min Opening Rank</div>
-        <input id="minOpeningRank" type="number" placeholder="e.g. 100000" />
-      </label>
+    <div class="filters">
+      <div class="field">
+        <label for="q-institute">Institute contains</label>
+        <input id="q-institute" type="text" placeholder="start typing to see options" list="institute-list" autocomplete="off">
+        <datalist id="institute-list"></datalist>
+      </div>
+      <div class="field">
+        <label for="q-program">Program contains</label>
+        <input id="q-program" type="text" placeholder="start typing to see options" list="program-list" autocomplete="off">
+        <datalist id="program-list"></datalist>
+      </div>
+      <div class="field">
+        <label for="q-round">Round</label>
+        <select id="q-round"><option value="">All rounds</option></select>
+      </div>
+      <div class="field">
+        <label for="q-quota">Quota</label>
+        <select id="q-quota"><option value="">All quotas</option></select>
+      </div>
+      <div class="field">
+        <label for="q-category">Category</label>
+        <select id="q-category"><option value="">All categories</option></select>
+      </div>
+      <div class="field">
+        <label for="q-gender">Seat gender</label>
+        <select id="q-gender"><option value="">All</option></select>
+      </div>
+      <div class="field">
+        <label>Closing rank range</label>
+        <div class="rank-row">
+          <input id="q-rank-min" type="number" placeholder="min">
+          <input id="q-rank-max" type="number" placeholder="max">
+        </div>
+      </div>
     </div>
 
-    <div class="row">
-      <button id="loadSampleBtn" type="button">Load Sample CSV</button>
-      <button id="filterBtn" type="button">Shortlist</button>
-      <button id="clearBtn" type="button" style="background:#64748b;">Clear</button>
-    </div>
-
-    <textarea id="csvText" placeholder="Paste CSV text here..."></textarea>
-    <div id="summary" class="summary">No data loaded</div>
-    <div style="overflow:auto;">
-      <table id="resultsTable">
-        <thead></thead>
-        <tbody></tbody>
-      </table>
+    <div class="toolbar">
+      <div class="count"><b id="count-num">0</b> rows matched</div>
+      <button class="reset" id="reset-btn">Reset filters</button>
     </div>
   </div>
 
-  <script>
-    const csvInput = document.getElementById('csvText');
-    const resultsTable = document.getElementById('resultsTable');
-    const summary = document.getElementById('summary');
+  <div class="table-wrap" id="table-wrap">
+    <div class="loadbar" id="loadbar">
+      loading data&hellip;
+      <div class="fileFallback">
+        If this doesn't load (e.g. you opened the file directly, without a local server),
+        choose the CSV manually: <input type="file" id="file-input" accept=".csv">
+      </div>
+    </div>
+  </div>
 
-    function parseCSV(text) {
-      if (!text || !text.trim()) return [];
-      const rows = [];
-      let row = [];
-      let field = '';
-      let inQuotes = false;
+  <div class="pager" id="pager" style="display:none;">
+    <button id="prev-btn">&larr; Prev</button>
+    <span id="page-label">Page 1 / 1</span>
+    <button id="next-btn">Next &rarr;</button>
+  </div>
 
-      for (let i = 0; i < text.length; i += 1) {
-        const char = text[i];
-        const next = text[i + 1];
+</main>
 
-        if (char === '"') {
-          if (inQuotes && next === '"') {
-            field += '"';
-            i += 1;
-          } else {
-            inQuotes = !inQuotes;
-          }
-        } else if (char === ',' && !inQuotes) {
-          row.push(field);
-          field = '';
-        } else if ((char === '\n' || char === '\r') && !inQuotes) {
-          if (char === '\r' && next === '\n') {
-            i += 1;
-          }
-          row.push(field);
-          field = '';
-          if (row.some(v => v !== '')) {
-            rows.push(row);
-          }
-          row = [];
-        } else {
-          field += char;
-        }
+<script>
+// ============================================================
+// CONFIG — edit this one line for your setup
+// ============================================================
+// Options:
+//   "UPdata.csv"                         -> file sitting next to this index.html (local server or GitHub Pages, same folder)
+//   "data/UPdata.csv"                    -> file in a subfolder of this repo
+//   "https://raw.githubusercontent.com/USERNAME/REPO/main/UPdata.csv"  -> raw file straight from GitHub (works even without GitHub Pages)
+// NOTE: a Windows path like "C:\Users\yadav\..." will NOT work here — browsers can't
+// fetch arbitrary local filesystem paths for security reasons. Always use a relative
+// path (same folder/repo) or a URL.
+const CSV_PATH = "UPdata.csv";
+const PAGE_SIZE = 100;
+
+// canonical column keys we use internally, mapped from raw (messy) headers
+const COLUMN_MAP = [
+  { key: "srNo",     match: /sr\.?\s*no/i },
+  { key: "round",    match: /^round/i },
+  { key: "institute",match: /institute/i },
+  { key: "program",  match: /program/i },
+  { key: "stream",   match: /stream/i },
+  { key: "quota",    match: /quota/i },
+  { key: "category", match: /category/i },
+  { key: "gender",   match: /seat\s*gender/i },
+  { key: "openRank", match: /opening\s*rank/i },
+  { key: "closeRank",match: /closing\s*rank/i },
+  { key: "remark",   match: /remark/i },
+];
+
+const COLUMNS = [
+  { key: "srNo",      label: "#",           num: true  },
+  { key: "round",     label: "Round"                    },
+  { key: "institute", label: "Institute",   cls:"institute" },
+  { key: "program",   label: "Program",     cls:"program"   },
+  { key: "quota",     label: "Quota"                    },
+  { key: "category",  label: "Category"                 },
+  { key: "gender",    label: "Seat Gender"              },
+  { key: "openRank",  label: "Opening Rank", num: true  },
+  { key: "closeRank", label: "Closing Rank", num: true  },
+  { key: "remark",    label: "Remark"                   },
+];
+
+let allRows = [];
+let filteredRows = [];
+let currentPage = 1;
+let sortState = { key: "closeRank", dir: "asc" };
+
+const $ = (sel) => document.querySelector(sel);
+const statusEl = $("#status");
+const tableWrap = $("#table-wrap");
+const pagerEl = $("#pager");
+const countEl = $("#count-num");
+
+function cleanHeader(h){
+  return h.replace(/\u00a0/g, " ").replace(/\?\?/g, "").trim();
+}
+
+function normalizeRow(raw){
+  const row = {};
+  for (const col of COLUMN_MAP){
+    let val = "";
+    for (const k in raw){
+      if (col.match.test(cleanHeader(k))){ val = raw[k]; break; }
+    }
+    row[col.key] = (val ?? "").toString().trim();
+  }
+  row.openRankNum = parseInt(row.openRank, 10);
+  row.closeRankNum = parseInt(row.closeRank, 10);
+  return row;
+}
+
+function populateSelect(id, values){
+  const sel = $(id);
+  [...values].sort().forEach(v => {
+    if (!v) return;
+    const opt = document.createElement("option");
+    opt.value = v; opt.textContent = v;
+    sel.appendChild(opt);
+  });
+}
+
+function populateDatalist(id, values){
+  const list = $(id);
+  [...values].sort().forEach(v => {
+    if (!v) return;
+    const opt = document.createElement("option");
+    opt.value = v;
+    list.appendChild(opt);
+  });
+}
+
+function loadRows(rawRows){
+  allRows = rawRows
+    .map(normalizeRow)
+    .filter(r => r.institute); // drop blank/malformed lines
+
+  populateSelect("#q-round", new Set(allRows.map(r => r.round)));
+  populateSelect("#q-quota", new Set(allRows.map(r => r.quota)));
+  populateSelect("#q-category", new Set(allRows.map(r => r.category)));
+  populateSelect("#q-gender", new Set(allRows.map(r => r.gender)));
+  populateDatalist("#program-list", new Set(allRows.map(r => r.program)));
+  populateDatalist("#institute-list", new Set(allRows.map(r => r.institute)));
+
+  statusEl.textContent = `${allRows.length.toLocaleString()} rows loaded`;
+  applyFilters();
+}
+
+function applyFilters(){
+  const instQ = $("#q-institute").value.trim().toLowerCase();
+  const progQ = $("#q-program").value.trim().toLowerCase();
+  const round = $("#q-round").value;
+  const quota = $("#q-quota").value;
+  const category = $("#q-category").value;
+  const gender = $("#q-gender").value;
+  const min = parseInt($("#q-rank-min").value, 10);
+  const max = parseInt($("#q-rank-max").value, 10);
+
+  filteredRows = allRows.filter(r => {
+    if (instQ && !r.institute.toLowerCase().includes(instQ)) return false;
+    if (progQ && !r.program.toLowerCase().includes(progQ)) return false;
+    if (round && r.round !== round) return false;
+    if (quota && r.quota !== quota) return false;
+    if (category && r.category !== category) return false;
+    if (gender && r.gender !== gender) return false;
+    if (!isNaN(min) && !(r.closeRankNum >= min)) return false;
+    if (!isNaN(max) && !(r.closeRankNum <= max)) return false;
+    return true;
+  });
+
+  sortRows();
+  currentPage = 1;
+  render();
+}
+
+function sortRows(){
+  const { key, dir } = sortState;
+  const mult = dir === "asc" ? 1 : -1;
+  filteredRows.sort((a, b) => {
+    let va = a[key], vb = b[key];
+    if (key === "openRank" || key === "closeRank"){
+      va = a[key + "Num"]; vb = b[key + "Num"];
+      if (isNaN(va)) va = Infinity;
+      if (isNaN(vb)) vb = Infinity;
+      return (va - vb) * mult;
+    }
+    va = (va || "").toString().toLowerCase();
+    vb = (vb || "").toString().toLowerCase();
+    if (va < vb) return -1 * mult;
+    if (va > vb) return 1 * mult;
+    return 0;
+  });
+}
+
+function render(){
+  countEl.textContent = filteredRows.length.toLocaleString();
+
+  if (filteredRows.length === 0){
+    tableWrap.innerHTML = `<div class="empty">No rows match these filters. Try widening your search.</div>`;
+    pagerEl.style.display = "none";
+    return;
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  currentPage = Math.min(currentPage, totalPages);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filteredRows.slice(start, start + PAGE_SIZE);
+
+  let html = "<table><thead><tr>";
+  for (const col of COLUMNS){
+    let cls = col.num ? "num" : "";
+    if (sortState.key === col.key) cls += sortState.dir === "asc" ? " active-asc" : " active-desc";
+    html += `<th class="${cls}" data-key="${col.key}">${col.label}</th>`;
+  }
+  html += "</tr></thead><tbody>";
+
+  for (const r of pageRows){
+    html += "<tr>";
+    for (const col of COLUMNS){
+      const cls = [col.cls, col.num ? "num" : ""].filter(Boolean).join(" ");
+      html += `<td class="${cls}">${escapeHtml(r[col.key])}</td>`;
+    }
+    html += "</tr>";
+  }
+  html += "</tbody></table>";
+  tableWrap.innerHTML = html;
+
+  tableWrap.querySelectorAll("th").forEach(th => {
+    th.addEventListener("click", () => {
+      const key = th.dataset.key;
+      if (sortState.key === key){
+        sortState.dir = sortState.dir === "asc" ? "desc" : "asc";
+      } else {
+        sortState = { key, dir: key.includes("Rank") ? "asc" : "asc" };
       }
-
-      if (field.length || row.length) {
-        row.push(field);
-        if (row.some(v => v !== '')) {
-          rows.push(row);
-        }
-      }
-
-      return rows;
-    }
-
-    function toRecords(rows) {
-      const headers = rows[0] || [];
-      const dataRows = rows.slice(1);
-      return dataRows
-        .filter(row => row.some(v => v !== ''))
-        .map((row) => ({
-          srNo: row[0] || '',
-          round: row[1] || '',
-          institute: row[2] || '',
-          program: row[3] || '',
-          stream: row[4] || '',
-          quota: row[5] || '',
-          category: row[6] || '',
-          seatGender: row[7] || '',
-          openingRank: row[8] || '',
-          closingRank: row[9] || '',
-          remark: row[10] || '',
-          raw: row
-        }));
-    }
-
-    function renderTable(records) {
-      const thead = resultsTable.querySelector('thead');
-      const tbody = resultsTable.querySelector('tbody');
-      thead.innerHTML = '';
-      tbody.innerHTML = '';
-
-      const columns = ['Sr.No','Round','Institute','Program','Category','Seat Gender','Quota','Opening Rank','Closing Rank','Remark'];
-      const headerRow = document.createElement('tr');
-      columns.forEach((col) => {
-        const th = document.createElement('th');
-        th.textContent = col;
-        headerRow.appendChild(th);
-      });
-      thead.appendChild(headerRow);
-
-      if (!records.length) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = columns.length;
-        td.textContent = 'No matching records.';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-        summary.textContent = '0 matching records';
-        return;
-      }
-
-      records.forEach((record) => {
-        const tr = document.createElement('tr');
-        [record.srNo, record.round, record.institute, record.program, record.category, record.seatGender, record.quota, record.openingRank, record.closingRank, record.remark].forEach((value) => {
-          const td = document.createElement('td');
-          td.textContent = value;
-          tr.appendChild(td);
-        });
-        tbody.appendChild(tr);
-      });
-
-      summary.textContent = `${records.length} matching records`;
-    }
-
-    function applyFilters() {
-      const text = csvInput.value;
-      const rows = parseCSV(text);
-      const records = toRecords(rows);
-      const institute = document.getElementById('instituteFilter').value.trim().toLowerCase();
-      const program = document.getElementById('programFilter').value.trim().toLowerCase();
-      const category = document.getElementById('categoryFilter').value.trim().toLowerCase();
-      const seatGender = document.getElementById('seatGenderFilter').value.trim().toLowerCase();
-      const quota = document.getElementById('quotaFilter').value.trim().toLowerCase();
-      const maxClosingRank = document.getElementById('maxClosingRank').value.trim();
-      const minOpeningRank = document.getElementById('minOpeningRank').value.trim();
-
-      const filtered = records.filter((record) => {
-        const instituteMatch = !institute || record.institute.toLowerCase().includes(institute);
-        const programMatch = !program || record.program.toLowerCase().includes(program);
-        const categoryMatch = !category || record.category.toLowerCase().includes(category);
-        const seatGenderMatch = !seatGender || record.seatGender.toLowerCase().includes(seatGender);
-        const quotaMatch = !quota || record.quota.toLowerCase().includes(quota);
-        const openingRank = Number(record.openingRank);
-        const closingRank = Number(record.closingRank);
-        const minOpeningMatch = !minOpeningRank || Number.isNaN(openingRank) || openingRank >= Number(minOpeningRank);
-        const maxClosingMatch = !maxClosingRank || Number.isNaN(closingRank) || closingRank <= Number(maxClosingRank);
-        return instituteMatch && programMatch && categoryMatch && seatGenderMatch && quotaMatch && minOpeningMatch && maxClosingMatch;
-      });
-
-      renderTable(filtered);
-    }
-
-    document.getElementById('filterBtn').addEventListener('click', applyFilters);
-    document.getElementById('clearBtn').addEventListener('click', () => {
-      document.getElementById('csvText').value = '';
-      document.getElementById('instituteFilter').value = '';
-      document.getElementById('programFilter').value = '';
-      document.getElementById('categoryFilter').value = '';
-      document.getElementById('seatGenderFilter').value = '';
-      document.getElementById('quotaFilter').value = '';
-      document.getElementById('maxClosingRank').value = '';
-      document.getElementById('minOpeningRank').value = '';
-      renderTable([]);
-      summary.textContent = 'No data loaded';
+      sortRows();
+      currentPage = 1;
+      render();
     });
+  });
 
-    document.getElementById('csvFile').addEventListener('change', (event) => {
-      const file = event.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        csvInput.value = reader.result;
-        applyFilters();
-      };
-      reader.readAsText(file);
-    });
+  pagerEl.style.display = "flex";
+  $("#page-label").textContent = `Page ${currentPage} / ${totalPages}`;
+  $("#prev-btn").disabled = currentPage <= 1;
+  $("#next-btn").disabled = currentPage >= totalPages;
+}
 
-    document.getElementById('loadSampleBtn').addEventListener('click', async () => {
-      try {
-        const response = await fetch('./uptac01.csv');
-        if (!response.ok) throw new Error('Sample file not found');
-        const text = await response.text();
-        csvInput.value = text;
-        applyFilters();
-      } catch (error) {
-        csvInput.value = 'Please upload a CSV file or paste its contents here.';
-        summary.textContent = 'Sample file could not be loaded. Please upload the CSV manually.';
-      }
-    });
-  </script>
+function escapeHtml(s){
+  return (s ?? "").toString()
+    .replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+// ---------- events ----------
+["#q-institute","#q-program","#q-rank-min","#q-rank-max"].forEach(id=>{
+  $(id).addEventListener("input", applyFilters);
+});
+["#q-round","#q-quota","#q-category","#q-gender"].forEach(id=>{
+  $(id).addEventListener("change", applyFilters);
+});
+$("#reset-btn").addEventListener("click", () => {
+  $("#q-institute").value = "";
+  $("#q-program").value = "";
+  $("#q-round").value = "";
+  $("#q-quota").value = "";
+  $("#q-category").value = "";
+  $("#q-gender").value = "";
+  $("#q-rank-min").value = "";
+  $("#q-rank-max").value = "";
+  applyFilters();
+});
+$("#prev-btn")?.addEventListener("click", () => { currentPage--; render(); });
+$("#next-btn")?.addEventListener("click", () => { currentPage++; render(); });
+
+document.addEventListener("click", (e) => {
+  if (e.target && e.target.id === "prev-btn"){ currentPage--; render(); }
+  if (e.target && e.target.id === "next-btn"){ currentPage++; render(); }
+});
+
+// ---------- data loading ----------
+function parseCsvText(text){
+  const result = Papa.parse(text, { header: true, skipEmptyLines: true });
+  loadRows(result.data);
+}
+
+fetch(CSV_PATH)
+  .then(res => {
+    if (!res.ok) throw new Error("fetch failed: " + res.status);
+    return res.text();
+  })
+  .then(parseCsvText)
+  .catch(err => {
+    statusEl.textContent = `couldn't auto-load ${CSV_PATH} (${err.message}). Use the file picker below.`;
+  });
+
+document.getElementById("file-input")?.addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => parseCsvText(reader.result);
+  reader.readAsText(file);
+});
+</script>
 </body>
 </html>
